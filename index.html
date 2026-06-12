@@ -5,27 +5,95 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>US Stocks Dashboard</title>
     <link rel="stylesheet" href="style.css">
-
 </head>
 <body>
+    <main class="app-shell">
+        <header class="topbar">
+            <div>
+                <p class="eyebrow">Live market snapshot</p>
+                <h1>US Stocks Dashboard</h1>
+                <p class="lede">
+                    Current ticker, company, sector, and market cap data for a
+                    50-stock US watchlist.
+                </p>
+            </div>
 
-    <h1>US Stocks</h1>
+            <div class="toolbar">
+                <button id="refreshButton" type="button" class="button primary">
+                    Refresh data
+                </button>
+                <label class="toggle">
+                    <input id="autoRefreshToggle" type="checkbox" checked>
+                    <span>Auto refresh</span>
+                </label>
+            </div>
+        </header>
 
-    <div id="loading">Loading stock data...</div>
+        <section class="summary-grid" aria-label="Stock summary">
+            <article class="summary-card">
+                <span class="summary-label">Requested</span>
+                <strong id="requestedCount">-</strong>
+            </article>
+            <article class="summary-card">
+                <span class="summary-label">Returned</span>
+                <strong id="returnedCount">-</strong>
+            </article>
+            <article class="summary-card">
+                <span class="summary-label">Failed</span>
+                <strong id="failedCount">-</strong>
+            </article>
+            <article class="summary-card">
+                <span class="summary-label">Load time</span>
+                <strong id="loadTime">-</strong>
+            </article>
+        </section>
 
-    <table>
-        <thead>
-            <tr>
-                <th>Ticker</th>
-                <th>Company Name</th>
-                <th>Sector</th>
-                <th>Market Cap</th>
-            </tr>
-        </thead>
-        <tbody id="stockTable"></tbody>
-    </table>
+        <section class="controls" aria-label="Table controls">
+            <label class="field">
+                <span>Search</span>
+                <input id="searchInput" type="search" placeholder="Ticker, company, or sector">
+            </label>
+            <label class="field">
+                <span>Sector</span>
+                <select id="sectorFilter">
+                    <option value="">All sectors</option>
+                </select>
+            </label>
+            <label class="field">
+                <span>Sort</span>
+                <select id="sortSelect">
+                    <option value="ticker">Ticker</option>
+                    <option value="name">Company name</option>
+                    <option value="sector">Sector</option>
+                    <option value="market_cap">Market cap</option>
+                </select>
+            </label>
+        </section>
+
+        <section class="status-row" aria-live="polite">
+            <div id="statusText" class="status">Loading stock data...</div>
+            <div id="persistedAt" class="timestamp"></div>
+        </section>
+
+        <section class="table-wrap" aria-label="Stocks table">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Ticker</th>
+                        <th>Company Name</th>
+                        <th>Sector</th>
+                        <th>Market Cap</th>
+                    </tr>
+                </thead>
+                <tbody id="stockTable"></tbody>
+            </table>
+        </section>
+
+        <section id="emptyState" class="empty-state hidden" aria-live="polite">
+            No stocks match the current filters.
+        </section>
+    </main>
 
     <script src="script.js"></script>
-
 </body>
 </html>
