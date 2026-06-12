@@ -1,6 +1,7 @@
 async function loadStocks() {
     const response = await fetch("http://127.0.0.1:5000/stocks");
     const data = await response.json();
+    console.log(response.json())
 
     const table = document.getElementById("stockTable");
     table.innerHTML = "";
