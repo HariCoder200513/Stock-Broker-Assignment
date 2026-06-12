@@ -60,48 +60,7 @@
         <tbody id="stockTable"></tbody>
     </table>
 
-    <script>
-        async function loadStocks() {
-            try {
-                const response = await fetch(
-                    "http://127.0.0.1:5000/stocks"
-                );
-
-                const stocks = await response.json();
-
-                console.log(stocks);
-
-                const table = document.getElementById("stockTable");
-                table.innerHTML = "";
-
-                stocks.forEach(stock => {
-                    const row = `
-                        <tr>
-                            <td>${stock.ticker || "N/A"}</td>
-                            <td>${stock.name || "N/A"}</td>
-                            <td>${stock.sector || "N/A"}</td>
-                            <td>${stock.market_cap?.toLocaleString() || "N/A"}</td>
-                        </tr>
-                    `;
-
-                    table.innerHTML += row;
-                });
-
-                document.getElementById("loading").style.display = "none";
-
-            } catch (error) {
-                console.error(error);
-
-                document.getElementById("loading").innerHTML =
-                    "Failed to load stock data.";
-            }
-        }
-
-        loadStocks();
-
-        // Refresh every 60 seconds
-        setInterval(loadStocks, 60000);
-    </script>
+    <script src="script.js"></script>
 
 </body>
 </html>
