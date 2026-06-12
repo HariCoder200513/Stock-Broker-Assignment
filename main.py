@@ -38,7 +38,7 @@ def fetch_stock(symbol):
 def get_stocks():
     start = time.time()
 
-    with ThreadPoolExecutor(max_workers=5) as executor:
+    with ThreadPoolExecutor(max_workers=100) as executor:
         results = list(executor.map(fetch_stock, TICKERS))
 
     results = [r for r in results if r is not None]
