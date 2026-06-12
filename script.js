@@ -21,4 +21,4 @@ async function loadStocks() {
     });
 }
 
-loadStocks();
+setInterval(loadStocks,30000)
