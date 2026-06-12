@@ -137,7 +137,7 @@ class StockComponentTests(unittest.TestCase):
             self.assertEqual(rows[0]["market_cap"], 110)
 
     @patch("routes.stocks.fetch_stock")
-    def test_process_stock_drops_invalid_fetch_result(self, fetch_stock):
+    def test_process_stock_reports_invalid_fetch_result(self, fetch_stock):
         fetch_stock.return_value = {
             "ticker": "AAPL",
             "name": None,
@@ -145,7 +145,9 @@ class StockComponentTests(unittest.TestCase):
             "market_cap": 100
         }
 
-        self.assertIsNone(process_stock("AAPL"))
+        result = process_stock("AAPL")
+        self.assertEqual(result["status"], "validation_failed")
+        self.assertIn("name is required.", result["message"])
 
 
 if __name__ == "__main__":
