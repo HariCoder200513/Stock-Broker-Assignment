@@ -194,6 +194,26 @@ h1 {
   text-align: right;
 }
 
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.badge.success {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.badge.warning {
+  background: #fff3cd;
+  color: #856404;
+}
+.badge.error {
+  background: #f8d7da;
+  color: #721c24;
+}
 .table-wrap {
   overflow: auto;
 }

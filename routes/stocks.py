@@ -35,82 +35,66 @@ logger = logging.getLogger(__name__)
 
 
 def process_stock(ticker):
-
+    stats = {"retries": 0}
     try:
-
-        record = fetch_stock(ticker)
-
+        record = fetch_stock(ticker, stats)
         errors = validation_errors(record)
 
         if errors:
-            logger.warning(
-                "Validation failed for %s: %s",
-                ticker,
-                "; ".join(errors)
-            )
+            return {
+                "ticker": ticker,
+                "status": "validation_failed",
+                "message": "; ".join(errors),
+                "retries": stats["retries"]
+            }
 
-            return None
-
+        record["retries"] = stats["retries"]
+        record["status"] = "success"
         return record
 
     except Exception as e:
-
-        logger.warning(
-            "Failed to process %s: %s",
-            ticker,
-            e
-        )
-
-        return None
+        return {
+            "ticker": ticker,
+            "status": "fetch_failed",
+            "message": str(e),
+            "retries": stats["retries"]
+        }
 
 
 @stocks_bp.route("/stocks")
 def get_stocks():
-
     start_time = time.time()
-
-    valid_records = []
+    results = []
 
     with ThreadPoolExecutor(
         max_workers=MAX_WORKERS
     ) as executor:
-
         futures = {
-            executor.submit(
-                process_stock,
-                ticker
-            ): ticker
+            executor.submit(process_stock, ticker): ticker
             for ticker in TICKERS
         }
 
-        for future in as_completed(
-            futures
-        ):
+        for future in as_completed(futures):
+            results.append(future.result())
 
-            result = future.result()
-
-            if result:
-                valid_records.append(
-                    result
-                )
-
+    valid_records = [r for r in results if r["status"] == "success"]
+    
     repository = StockRepository()
-
     snapshot = repository.save(
         valid_records,
         expected_tickers=TICKERS
     )
 
-    elapsed = round(
-        time.time() - start_time,
-        2
-    )
+    elapsed = round(time.time() - start_time, 2)
+    
+    total_retries = sum(r.get("retries", 0) for r in results)
 
     return jsonify({
         "requested": len(TICKERS),
         "returned": len(valid_records),
         "failed": len(TICKERS) - len(valid_records),
+        "total_retries": total_retries,
         "persisted_at": snapshot["completed_at"],
         "time_taken_seconds": elapsed,
-        "stocks": snapshot["stocks"]
+        "stocks": results # Send all results to show failures/retries
     })

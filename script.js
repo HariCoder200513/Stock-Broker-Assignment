@@ -112,14 +112,26 @@ function renderTable() {
 
     emptyState.classList.add("hidden");
 
-    const rows = state.filteredStocks.map(stock => `
-        <tr>
-            <td class="mono">${stock.ticker}</td>
-            <td>${stock.name ?? "N/A"}</td>
-            <td>${stock.sector ?? "N/A"}</td>
-            <td class="mono">${formatMarketCap(stock.market_cap)}</td>
-        </tr>
-    `);
+    const rows = state.filteredStocks.map(stock => {
+        let statusBadge = "";
+        if (stock.status === "success") {
+            statusBadge = stock.retries > 0 
+                ? `<span class="badge warning">Retried (${stock.retries})</span>` 
+                : '<span class="badge success">OK</span>';
+        } else {
+            statusBadge = `<span class="badge error" title="${stock.message || ''}">Failed</span>`;
+        }
+
+        return `
+            <tr>
+                <td class="mono">${stock.ticker}</td>
+                <td>${stock.name ?? "N/A"}</td>
+                <td>${stock.sector ?? "N/A"}</td>
+                <td class="mono">${formatMarketCap(stock.market_cap)}</td>
+                <td>${statusBadge}</td>
+            </tr>
+        `;
+    });
 
     table.innerHTML = rows.join("");
 }
@@ -128,6 +140,7 @@ function updateSummary(data) {
     document.getElementById("requestedCount").textContent = data.requested ?? "-";
     document.getElementById("returnedCount").textContent = data.returned ?? "-";
     document.getElementById("failedCount").textContent = data.failed ?? "-";
+    document.getElementById("retriesCount").textContent = data.total_retries ?? "-";
     document.getElementById("loadTime").textContent =
         typeof data.time_taken_seconds === "number"
             ? `${data.time_taken_seconds.toFixed(2)}s`

@@ -134,12 +134,21 @@ class YahooFinanceFetcher:
 _default_fetcher = YahooFinanceFetcher()
 
 
+def _track_retry(retry_state):
+    if retry_state.attempt_number > 1:
+        ticker = retry_state.args[0]
+        stats = retry_state.args[1] if len(retry_state.args) > 1 else None
+        if isinstance(stats, dict):
+            stats["retries"] = retry_state.attempt_number - 1
+
+
 @retry(
     stop=stop_after_attempt(FETCH_RETRY_ATTEMPTS),
     wait=wait_exponential(multiplier=1, min=1, max=8),
     retry=retry_if_exception_type(TransientMarketDataError),
     before_sleep=before_sleep_log(logger, logging.WARNING),
+    after=_track_retry,
     reraise=True
 )
-def fetch_stock(ticker: str) -> dict:
+def fetch_stock(ticker: str, stats: dict = None) -> dict:
     return _default_fetcher.fetch(ticker)
