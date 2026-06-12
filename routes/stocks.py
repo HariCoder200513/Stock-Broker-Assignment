@@ -1,109 +1,31 @@
-from flask import Blueprint
-from flask import jsonify
+"""
+Flask blueprint for the /stocks REST endpoint.
 
-from concurrent.futures import (
-    ThreadPoolExecutor,
-    as_completed
-)
+This is a thin HTTP adapter — all business logic lives in the
+``orchestrator.pipeline`` module.  The route's only job is to:
+  1. Trigger an ingestion run.
+  2. Serialize the result as JSON.
+"""
 
-import time
 import logging
 
-from config import (
-    TICKERS,
-    MAX_WORKERS
-)
+from flask import Blueprint, jsonify
 
-from fetcher.yahoo_fetcher import (
-    fetch_stock
-)
+from orchestrator.pipeline import run_ingestion
 
-from validator.stock_validator import (
-    validation_errors
-)
-
-from persistence.repository import (
-    StockRepository
-)
-
-stocks_bp = Blueprint(
-    "stocks",
-    __name__
-)
-
+stocks_bp = Blueprint("stocks", __name__)
 logger = logging.getLogger(__name__)
-
-
-def process_stock(ticker):
-    stats = {"retries": 0}
-    try:
-        record = fetch_stock(ticker, stats)
-        errors = validation_errors(record)
-
-        if errors:
-            return {
-                "ticker": ticker,
-                "status": "validation_failed",
-                "message": "; ".join(errors),
-                "retries": stats["retries"]
-            }
-
-        record["retries"] = stats["retries"]
-        record["status"] = "success"
-        return record
-
-    except Exception as e:
-        return {
-            "ticker": ticker,
-            "status": "fetch_failed",
-            "message": str(e),
-            "retries": stats["retries"]
-        }
 
 
 @stocks_bp.route("/stocks")
 def get_stocks():
-    start_time = time.time()
-    results = []
+    """
+    GET /stocks
 
-    with ThreadPoolExecutor(
-        max_workers=MAX_WORKERS
-    ) as executor:
-        futures = {
-            executor.submit(process_stock, ticker): ticker
-            for ticker in TICKERS
-        }
+    Triggers a fresh ingestion run — fetches market data for every ticker
+    in the watchlist, validates, persists to SQLite, and returns the full
+    result set (including per-ticker success/failure status).
+    """
+    result = run_ingestion()
 
-        for future in as_completed(futures):
-            results.append(future.result())
-
-    valid_records = [r for r in results if r["status"] == "success"]
-    
-    repository = StockRepository()
-    snapshot = repository.save(
-        valid_records,
-        expected_tickers=TICKERS
-    )
-
-    elapsed = round(time.time() - start_time, 2)
-    
-    total_retries = sum(r.get("retries", 0) for r in results)
-
-    summary = {
-        "requested": len(TICKERS),
-        "returned": len(valid_records),
-        "failed": len(TICKERS) - len(valid_records),
-        "total_retries": total_retries,
-        "time_taken_seconds": elapsed
-    }
-    logger.info("Ingestion run completed", extra={"extra_fields": summary})
-
-    return jsonify({
-        "requested": summary["requested"],
-        "returned": summary["returned"],
-        "failed": summary["failed"],
-        "total_retries": summary["total_retries"],
-        "persisted_at": snapshot["completed_at"],
-        "time_taken_seconds": elapsed,
-        "stocks": results # Send all results to show failures/retries
-    })
+    return jsonify(result)

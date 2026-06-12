@@ -1,41 +1,70 @@
+"""
+Central configuration for the market-data ingestion service.
+
+All tuneable constants live here so they can be reviewed (or overridden via
+environment variables in production) without touching business logic.
+"""
+
+import os
+
+# ── Ticker Universe ─────────────────────────────────────────────────────────
+# A curated watchlist of 50+ US-listed equities spanning mega-cap tech,
+# financials, healthcare, consumer, energy, and industrials.
+# Duplicates are stripped automatically at import time.
 TICKERS = [
-    # Top 50
-    "AAPL", "MSFT", "GOOGL", "AMZN", "META", "TSLA", "NVDA", "JPM", "BAC", "WMT",
-    "V", "MA", "NFLX", "ADBE", "CRM", "ORCL", "INTC", "AMD", "CSCO", "IBM",
-    "PEP", "KO", "DIS", "MCD", "NKE", "XOM", "CVX", "PFE", "MRK", "ABT",
-    "T", "VZ", "COST", "HD", "LOW", "CAT", "GE", "UPS", "FDX", "GS",
-    "MS", "BLK", "UBER", "LYFT", "SQ", "SHOP", "PLTR", "SNOW", "PANW", "CRWD",
-    
-    # 51-100
-    "AVGO", "COST", "TMUS", "TXN", "QCOM", "AMAT", "INTU", "ISRG", "AMGN", "HON",
-    "LRCX", "PGR", "UNH", "LLY", "VRTX", "BKNG", "SBUX", "MDLZ", "REGN", "ADP",
-    "ADI", "MU", "GILD", "PANW", "MELI", "SNPS", "CDNS", "PYPL", "MAR", "KLAC",
-    "ORLY", "CTAS", "MNST", "LULU", "ROP", "CDW", "IDXX", "ADSK", "PCAR", "DXCM",
-    "CPRT", "MCHP", "ROST", "PAYX", "FAST", "ODFL", "KDP", "AZN", "EXC", "KLA",
+    # ── Mega-cap Technology ──
+    "AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA", "TSLA",
 
-    # 101-150
-    "AEP", "BKR", "BIIB", "CHTR", "CMCSA", "CPRT", "CSX", "CTSH", "DDOG", "DLTR",
-    "EA", "EBAY", "ENPH", "EXPE", "FANG", "FTNT", "GEHC", "IDXX", "ILMN", "KHC",
-    "LCID", "MCHP", "MRNA", "MRVL", "ODFL", "ON", "ORLY", "PANW", "PAYX", "PYPL",
-    "QCOM", "ROST", "SBUX", "SGEN", "SIRI", "SNPS", "TEAM", "TMUS", "TXN", "VRSK",
-    "VRTX", "WBA", "WBD", "WDAY", "XEL", "ZS", "ABNB", "CEG", "GFS", "PDD",
+    # ── Enterprise Software / Cloud ──
+    "ADBE", "CRM", "ORCL", "NFLX", "INTC", "AMD", "CSCO", "IBM",
 
-    # 151-200
-    "ANSS", "ASML", "AXON", "CDNS", "DASH", "FI", "KLAC", "LRCX", "MDB", "MELI",
-    "MNST", "ROP", "SNOW", "SPLK", "TTD", "WDAY", "A", "AA", "AAL", "AAON",
-    "AAP", "AAWW", "ABBV", "ABC", "ABG", "ABM", "ABMD", "ABT", "ACAD", "ACC",
-    "ACGL", "ACHC", "ACI", "ACIW", "ACLS", "ACM", "ACN", "ACRE", "ACRS", "ACRX",
-    "ACTG", "ACU", "ACVA", "ADAP", "ADBE", "ADC", "ADCT", "ADI", "ADM", "ADMA"
+    # ── Financials ──
+    "JPM", "BAC", "GS", "MS", "BLK", "V", "MA",
+
+    # ── Consumer / Retail ──
+    "WMT", "COST", "HD", "LOW", "MCD", "NKE", "DIS", "PEP", "KO",
+
+    # ── Energy ──
+    "XOM", "CVX",
+
+    # ── Healthcare / Pharma ──
+    "PFE", "MRK", "ABT", "UNH", "LLY",
+
+    # ── Telecom ──
+    "T", "VZ",
+
+    # ── Industrials / Logistics ──
+    "CAT", "GE", "UPS", "FDX",
+
+    # ── High-Growth / Recent IPOs ──
+    "UBER", "LYFT", "SQ", "SHOP", "PLTR", "SNOW", "PANW", "CRWD",
 ]
 
-# Ensure uniqueness and count
+# Remove accidental duplicates while preserving order.
 TICKERS = list(dict.fromkeys(TICKERS))
 
+# Guard: the assignment requires a minimum of 50 tickers.
 if len(TICKERS) < 50:
-    raise ValueError("At least 50 stock tickers are required.")
+    raise ValueError(
+        f"Watchlist has only {len(TICKERS)} tickers; at least 50 are required."
+    )
 
-MAX_WORKERS = 25  # Increased slightly for 200 tickers
-FETCH_TIMEOUT_SECONDS = 8
-FETCH_RETRY_ATTEMPTS = 3
-DATABASE_PATH = "data/market_data.sqlite3"
-PERSISTENCE_PATH = DATABASE_PATH
+
+# ── Concurrency ─────────────────────────────────────────────────────────────
+# Controls how many tickers we fetch in parallel.  Higher values speed up the
+# run but risk Yahoo Finance rate-limiting (HTTP 429).  25 workers is a safe
+# middle ground for ~50 tickers.
+MAX_WORKERS = int(os.getenv("MAX_WORKERS", "25"))
+
+# ── Fetcher Resilience ──────────────────────────────────────────────────────
+# Per-ticker timeout for the Yahoo Finance API call.
+FETCH_TIMEOUT_SECONDS = int(os.getenv("FETCH_TIMEOUT_SECONDS", "10"))
+
+# Maximum retry attempts per ticker before marking it as failed.
+# Uses exponential back-off (1 s → 2 s → 4 s → …) between retries.
+FETCH_RETRY_ATTEMPTS = int(os.getenv("FETCH_RETRY_ATTEMPTS", "3"))
+
+# ── Storage ─────────────────────────────────────────────────────────────────
+# Path to the SQLite database file.  The directory is created automatically
+# by the repository if it doesn't exist.
+DATABASE_PATH = os.getenv("DATABASE_PATH", "data/market_data.sqlite3")
