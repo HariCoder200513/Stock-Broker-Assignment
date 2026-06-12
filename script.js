@@ -1,4 +1,5 @@
-const DEFAULT_API_URL = "http://127.0.0.1:5000/stocks";
+// Relative URL — works on both localhost and deployed environments (Render, etc.)
+const DEFAULT_API_URL = "/stocks";
 const AUTO_REFRESH_MS = 30000;
 
 const state = {
