@@ -214,6 +214,30 @@ h1 {
   background: #f8d7da;
   color: #721c24;
 }
+
+.pagination {
+  padding: 16px 18px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  display: flex;
+  justify-content: center;
+}
+
+.pagination-inner {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.page-indicator {
+  font-weight: 600;
+  color: var(--muted);
+  min-width: 100px;
+  text-align: center;
+}
+
 .table-wrap {
   overflow: auto;
 }

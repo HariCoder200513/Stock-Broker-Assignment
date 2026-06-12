@@ -11,7 +11,7 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s: %(message)s"
 )
 
-app = Flask(__name__)
+app = Flask(__name__, static_url_path='', static_folder='.')
 
 CORS(app)
 
@@ -21,11 +21,8 @@ app.register_blueprint(
 
 
 @app.route("/")
-def health():
-
-    return {
-        "status": "healthy"
-    }
+def index():
+    return app.send_static_file('index.html')
 
 
 if __name__ == "__main__":

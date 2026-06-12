@@ -5,7 +5,9 @@ const state = {
     stocks: [],
     filteredStocks: [],
     loading: false,
-    timerId: null
+    timerId: null,
+    currentPage: 1,
+    itemsPerPage: 50
 };
 
 function getApiUrl() {
@@ -77,6 +79,7 @@ function applyFilters() {
     });
 
     state.filteredStocks = filtered;
+    state.currentPage = 1; // Reset to page 1 on filter change
     renderTable();
 }
 
@@ -107,12 +110,21 @@ function renderTable() {
 
     if (state.filteredStocks.length === 0) {
         emptyState.classList.remove("hidden");
+        updatePaginationControls(0);
         return;
     }
 
     emptyState.classList.add("hidden");
 
-    const rows = state.filteredStocks.map(stock => {
+    const totalPages = Math.ceil(state.filteredStocks.length / state.itemsPerPage);
+    if (state.currentPage > totalPages) state.currentPage = totalPages;
+    if (state.currentPage < 1) state.currentPage = 1;
+
+    const start = (state.currentPage - 1) * state.itemsPerPage;
+    const end = start + state.itemsPerPage;
+    const pageItems = state.filteredStocks.slice(start, end);
+
+    const rows = pageItems.map(stock => {
         let statusBadge = "";
         if (stock.status === "success") {
             statusBadge = stock.retries > 0 
@@ -134,6 +146,17 @@ function renderTable() {
     });
 
     table.innerHTML = rows.join("");
+    updatePaginationControls(totalPages);
+}
+
+function updatePaginationControls(totalPages) {
+    const prevBtn = document.getElementById("prevPageButton");
+    const nextBtn = document.getElementById("nextPageButton");
+    const indicator = document.getElementById("pageIndicator");
+
+    prevBtn.disabled = state.currentPage <= 1;
+    nextBtn.disabled = state.currentPage >= totalPages || totalPages === 0;
+    indicator.textContent = `Page ${totalPages > 0 ? state.currentPage : 0} of ${totalPages}`;
 }
 
 function updateSummary(data) {
@@ -196,6 +219,21 @@ function setupControls() {
     document.getElementById("searchInput").addEventListener("input", applyFilters);
     document.getElementById("sectorFilter").addEventListener("change", applyFilters);
     document.getElementById("sortSelect").addEventListener("change", applyFilters);
+
+    document.getElementById("prevPageButton").addEventListener("click", () => {
+        if (state.currentPage > 1) {
+            state.currentPage--;
+            renderTable();
+        }
+    });
+
+    document.getElementById("nextPageButton").addEventListener("click", () => {
+        const totalPages = Math.ceil(state.filteredStocks.length / state.itemsPerPage);
+        if (state.currentPage < totalPages) {
+            state.currentPage++;
+            renderTable();
+        }
+    });
 
     const autoRefreshToggle = document.getElementById("autoRefreshToggle");
     autoRefreshToggle.addEventListener("change", event => {
