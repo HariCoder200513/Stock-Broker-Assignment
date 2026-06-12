@@ -89,11 +89,20 @@ def get_stocks():
     
     total_retries = sum(r.get("retries", 0) for r in results)
 
-    return jsonify({
+    summary = {
         "requested": len(TICKERS),
         "returned": len(valid_records),
         "failed": len(TICKERS) - len(valid_records),
         "total_retries": total_retries,
+        "time_taken_seconds": elapsed
+    }
+    logger.info("Ingestion run completed", extra={"extra_fields": summary})
+
+    return jsonify({
+        "requested": summary["requested"],
+        "returned": summary["returned"],
+        "failed": summary["failed"],
+        "total_retries": summary["total_retries"],
         "persisted_at": snapshot["completed_at"],
         "time_taken_seconds": elapsed,
         "stocks": results # Send all results to show failures/retries

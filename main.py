@@ -6,10 +6,9 @@ from routes.stocks import (
     stocks_bp
 )
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(name)s: %(message)s"
-)
+from logger_config import setup_logging
+
+setup_logging()
 
 app = Flask(__name__, static_url_path='', static_folder='.')
 
