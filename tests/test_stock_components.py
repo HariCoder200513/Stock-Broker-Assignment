@@ -65,6 +65,77 @@ class StockComponentTests(unittest.TestCase):
             self.assertEqual(row["market_cap"], 100)
             self.assertEqual(row["is_stale"], 0)
 
+    def test_repository_handles_duplicates_in_batch(self):
+        records = [
+            {"ticker": "AAPL", "name": "Apple", "sector": "Tech", "market_cap": 100},
+            {"ticker": "AAPL", "name": "Apple Inc.", "sector": "Technology", "market_cap": 110},
+        ]
+
+        with TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "test_stocks.db"
+            repo = StockRepository(str(db_path))
+            
+            snapshot = repo.save(records, expected_tickers=["AAPL"])
+            
+            self.assertEqual(snapshot["valid_count"], 1)
+            self.assertEqual(snapshot["duplicate_count"], 1)
+            self.assertEqual(snapshot["stocks"][0]["name"], "Apple Inc.") # Last one wins
+
+    def test_repository_marks_stale_data(self):
+        record1 = {"ticker": "AAPL", "name": "Apple", "sector": "Tech", "market_cap": 100}
+        record2 = {"ticker": "MSFT", "name": "Microsoft", "sector": "Tech", "market_cap": 200}
+
+        with TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "test_stocks.db"
+            repo = StockRepository(str(db_path))
+            
+            # First run: both AAPL and MSFT
+            repo.save([record1, record2], expected_tickers=["AAPL", "MSFT"])
+            
+            # Second run: only AAPL expected, MSFT should be marked stale
+            snapshot = repo.save([record1], expected_tickers=["AAPL"])
+            
+            self.assertEqual(snapshot["stale_count"], 1)
+            
+            # Verify database state
+            import sqlite3
+            conn = sqlite3.connect(db_path)
+            conn.row_factory = sqlite3.Row
+            msft = conn.execute("SELECT * FROM market_data WHERE ticker = 'MSFT'").fetchone()
+            conn.close()
+            
+            self.assertEqual(msft["is_stale"], 1)
+            self.assertIsNotNone(msft["stale_since"])
+
+    def test_repository_idempotent_upsert(self):
+        record = {"ticker": "AAPL", "name": "Apple", "sector": "Tech", "market_cap": 100}
+
+        with TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "test_stocks.db"
+            repo = StockRepository(str(db_path))
+            
+            # First run
+            repo.save([record], expected_tickers=["AAPL"])
+            
+            # Second run with same data
+            snapshot = repo.save([record], expected_tickers=["AAPL"])
+            self.assertEqual(snapshot["upserted_count"], 1)
+            
+            # Third run with updated data
+            updated_record = record.copy()
+            updated_record["market_cap"] = 110
+            repo.save([updated_record], expected_tickers=["AAPL"])
+            
+            # Verify database state
+            import sqlite3
+            conn = sqlite3.connect(db_path)
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute("SELECT * FROM market_data WHERE ticker = 'AAPL'").fetchall()
+            conn.close()
+            
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0]["market_cap"], 110)
+
     @patch("routes.stocks.fetch_stock")
     def test_process_stock_drops_invalid_fetch_result(self, fetch_stock):
         fetch_stock.return_value = {
