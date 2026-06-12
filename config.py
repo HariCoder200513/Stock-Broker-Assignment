@@ -34,7 +34,7 @@ TICKERS = list(dict.fromkeys(TICKERS))
 if len(TICKERS) < 50:
     raise ValueError("At least 50 stock tickers are required.")
 
-MAX_WORKERS = 10  # Increased slightly for 200 tickers
+MAX_WORKERS = 25  # Increased slightly for 200 tickers
 FETCH_TIMEOUT_SECONDS = 8
 FETCH_RETRY_ATTEMPTS = 3
 DATABASE_PATH = "data/market_data.sqlite3"
