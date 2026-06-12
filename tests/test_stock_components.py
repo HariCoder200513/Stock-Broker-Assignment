@@ -43,13 +43,27 @@ class StockComponentTests(unittest.TestCase):
         }
 
         with TemporaryDirectory() as temp_dir:
-            path = Path(temp_dir) / "stocks.json"
-
-            snapshot = StockRepository(str(path)).save([record])
-            saved = json.loads(path.read_text(encoding="utf-8"))
-
-        self.assertEqual(snapshot["count"], 1)
-        self.assertEqual(saved["stocks"], [record])
+            db_path = Path(temp_dir) / "test_stocks.db"
+            repo = StockRepository(str(db_path))
+            
+            snapshot = repo.save([record], expected_tickers=["AAPL"])
+            
+            # Verify snapshot response
+            self.assertEqual(snapshot["valid_count"], 1)
+            self.assertEqual(len(snapshot["stocks"]), 1)
+            self.assertEqual(snapshot["stocks"][0]["ticker"], "AAPL")
+            
+            # Verify database state directly
+            import sqlite3
+            conn = sqlite3.connect(db_path)
+            conn.row_factory = sqlite3.Row
+            row = conn.execute("SELECT * FROM market_data WHERE ticker = 'AAPL'").fetchone()
+            conn.close()
+            
+            self.assertIsNotNone(row)
+            self.assertEqual(row["name"], "Apple Inc.")
+            self.assertEqual(row["market_cap"], 100)
+            self.assertEqual(row["is_stale"], 0)
 
     @patch("routes.stocks.fetch_stock")
     def test_process_stock_drops_invalid_fetch_result(self, fetch_stock):
