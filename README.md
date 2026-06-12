@@ -97,9 +97,4 @@ CREATE TABLE IF NOT EXISTS ingestion_runs (
 
 ---
 
-## 🧪 Testing
-Run the comprehensive test suite (Unit + Component tests):
-```bash
-export PYTHONPATH=$PYTHONPATH:.
-python3 -m unittest discover tests
-```
+
