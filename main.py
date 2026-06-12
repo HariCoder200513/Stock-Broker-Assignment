@@ -1,3 +1,5 @@
+import os
+
 from flask import Flask
 from flask_cors import CORS
 import logging
@@ -25,7 +27,13 @@ def index():
 
 
 if __name__ == "__main__":
+    # Render injects PORT as an env var; default to 5000 for local dev.
+    # host="0.0.0.0" binds to all interfaces — required by Render
+    # (localhost-only binding causes the port scan timeout error).
+    port = int(os.environ.get("PORT", 5000))
 
     app.run(
-        debug=True
+        host="0.0.0.0",
+        port=port,
+        debug=False
     )
