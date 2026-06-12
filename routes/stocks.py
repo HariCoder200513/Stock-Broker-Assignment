@@ -109,7 +109,7 @@ def get_stocks():
         "requested": len(TICKERS),
         "returned": len(valid_records),
         "failed": len(TICKERS) - len(valid_records),
-        "persisted_at": snapshot["updated_at"],
+        "persisted_at": snapshot["completed_at"],
         "time_taken_seconds": elapsed,
-        "stocks": valid_records
+        "stocks": snapshot["stocks"]
     })
