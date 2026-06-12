@@ -1,8 +1,14 @@
 from flask import Flask
 from flask_cors import CORS
+import logging
 
 from routes.stocks import (
     stocks_bp
+)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s"
 )
 
 app = Flask(__name__)

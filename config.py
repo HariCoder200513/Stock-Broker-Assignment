@@ -11,4 +11,10 @@ TICKERS = [
     "SHOP", "PLTR", "SNOW", "PANW", "CRWD"
 ]
 
+if len(TICKERS) < 50:
+    raise ValueError("At least 50 stock tickers are required.")
+
 MAX_WORKERS = 5
+FETCH_TIMEOUT_SECONDS = 8
+FETCH_RETRY_ATTEMPTS = 3
+PERSISTENCE_PATH = "data/stocks.json"

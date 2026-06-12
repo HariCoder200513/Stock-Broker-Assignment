@@ -1,24 +1,38 @@
-def validate_stock(record: dict) -> bool:
+REQUIRED_FIELDS = [
+    "ticker",
+    "name",
+    "sector",
+    "market_cap"
+]
+
+
+def validation_errors(record: dict) -> list[str]:
+    errors = []
 
     if record is None:
-        return False
+        return ["Record is missing."]
 
-    required_fields = [
-        "ticker",
-        "name",
-        "sector",
-        "market_cap"
-    ]
+    for field in REQUIRED_FIELDS:
 
-    for field in required_fields:
-
-        if record.get(field) is None:
-            return False
+        if record.get(field) in (None, ""):
+            errors.append(
+                f"{field} is required."
+            )
 
     if not isinstance(
-        record["market_cap"],
+        record.get("market_cap"),
         int
     ):
-        return False
+        errors.append(
+            "market_cap must be an integer."
+        )
+    elif record["market_cap"] <= 0:
+        errors.append(
+            "market_cap must be positive."
+        )
 
-    return True
+    return errors
+
+
+def validate_stock(record: dict) -> bool:
+    return len(validation_errors(record)) == 0

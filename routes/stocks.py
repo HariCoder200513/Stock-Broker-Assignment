@@ -7,6 +7,7 @@ from concurrent.futures import (
 )
 
 import time
+import logging
 
 from config import (
     TICKERS,
@@ -18,7 +19,7 @@ from fetcher.yahoo_fetcher import (
 )
 
 from validator.stock_validator import (
-    validate_stock
+    validation_errors
 )
 
 from persistence.repository import (
@@ -30,6 +31,8 @@ stocks_bp = Blueprint(
     __name__
 )
 
+logger = logging.getLogger(__name__)
+
 
 def process_stock(ticker):
 
@@ -37,10 +40,13 @@ def process_stock(ticker):
 
         record = fetch_stock(ticker)
 
-        if not validate_stock(record):
+        errors = validation_errors(record)
 
-            print(
-                f"Validation failed: {ticker}"
+        if errors:
+            logger.warning(
+                "Validation failed for %s: %s",
+                ticker,
+                "; ".join(errors)
             )
 
             return None
@@ -49,8 +55,10 @@ def process_stock(ticker):
 
     except Exception as e:
 
-        print(
-            f"Failed {ticker}: {e}"
+        logger.warning(
+            "Failed to process %s: %s",
+            ticker,
+            e
         )
 
         return None
@@ -88,7 +96,7 @@ def get_stocks():
 
     repository = StockRepository()
 
-    repository.save(
+    snapshot = repository.save(
         valid_records
     )
 
@@ -100,6 +108,8 @@ def get_stocks():
     return jsonify({
         "requested": len(TICKERS),
         "returned": len(valid_records),
+        "failed": len(TICKERS) - len(valid_records),
+        "persisted_at": snapshot["updated_at"],
         "time_taken_seconds": elapsed,
         "stocks": valid_records
     })
