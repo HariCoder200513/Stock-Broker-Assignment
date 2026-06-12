@@ -1,55 +1,102 @@
-from flask import Flask, jsonify
-from flask_cors import CORS
-from concurrent.futures import ThreadPoolExecutor
-import yfinance as yf
+from concurrent.futures import (
+    ThreadPoolExecutor,
+    as_completed
+)
+
+from config import (
+    TICKERS,
+    MAX_WORKERS
+)
+
+from fetcher.yahoo_fetcher import (
+    fetch_stock
+)
+
+from validator.stock_validator import (
+    validate_stock
+)
+
+from persistence.repository import (
+    StockRepository
+)
+
 import time
 
-app = Flask(__name__)
-CORS(app)
 
-TICKERS = [
-    "AAPL", "MSFT", "GOOGL", "AMZN", "META",
-    "TSLA", "NVDA", "JPM", "BAC", "WMT",
-    "V", "MA", "NFLX", "ADBE", "CRM",
-    "ORCL", "INTC", "AMD", "CSCO", "IBM",
-    "PEP", "KO", "DIS", "MCD", "NKE",
-    "XOM", "CVX", "PFE", "MRK", "ABT",
-    "T", "VZ", "COST", "HD", "LOW",
-    "CAT", "GE", "UPS", "FDX", "GS",
-    "MS", "BLK", "UBER", "LYFT", "SQ",
-    "SHOP", "PLTR", "SNOW", "PANW", "CRWD"
-]
+def process_stock(ticker):
 
-def fetch_stock(symbol):
     try:
-        info = yf.Ticker(symbol).info
 
-        return {
-            "ticker": symbol,
-            "name": info.get("longName"),
-            "sector": info.get("sector"),
-            "market_cap": info.get("marketCap")
-        }
+        record = fetch_stock(ticker)
+
+        if not validate_stock(record):
+
+            print(
+                f"Validation failed: {ticker}"
+            )
+
+            return None
+
+        return record
+
     except Exception as e:
-        print(f"Error fetching {symbol}: {e}")
+
+        print(
+            f"Failed {ticker}: {e}"
+        )
+
         return None
 
-@app.route("/stocks")
-def get_stocks():
-    start = time.time()
 
-    with ThreadPoolExecutor(max_workers=100) as executor:
-        results = list(executor.map(fetch_stock, TICKERS))
+def run_pipeline():
 
-    results = [r for r in results if r is not None]
+    start_time = time.time()
 
-    elapsed = round(time.time() - start, 2)
+    valid_records = []
 
-    return jsonify({
-        "count": len(results),
-        "time_taken_seconds": elapsed,
-        "stocks": results
-    })
+    with ThreadPoolExecutor(
+        max_workers=MAX_WORKERS
+    ) as executor:
+
+        futures = {
+            executor.submit(
+                process_stock,
+                ticker
+            ): ticker
+            for ticker in TICKERS
+        }
+
+        for future in as_completed(
+            futures
+        ):
+
+            result = future.result()
+
+            if result:
+                valid_records.append(
+                    result
+                )
+
+    repository = StockRepository()
+
+    repository.save(
+        valid_records
+    )
+
+    elapsed = round(
+        time.time() - start_time,
+        2
+    )
+
+    print(
+        f"""
+Requested : {len(TICKERS)}
+Valid     : {len(valid_records)}
+Time      : {elapsed}s
+"""
+    )
+
 
 if __name__ == "__main__":
-    app.run(debug=True)
+
+    run_pipeline()
