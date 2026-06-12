@@ -97,7 +97,8 @@ def get_stocks():
     repository = StockRepository()
 
     snapshot = repository.save(
-        valid_records
+        valid_records,
+        expected_tickers=TICKERS
     )
 
     elapsed = round(
