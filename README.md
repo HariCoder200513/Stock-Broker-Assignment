@@ -6,7 +6,7 @@ A production-minded ingestion service that fetches real-time market data for 50+
 
 ### Option 1: Docker (Recommended)
 ```bash
-docker-compose up --build
+docker compose up --build
 ```
 Access the dashboard at: [http://127.0.0.1:5000](http://127.0.0.1:5000)
 
