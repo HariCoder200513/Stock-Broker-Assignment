@@ -68,3 +68,20 @@ FETCH_RETRY_ATTEMPTS = int(os.getenv("FETCH_RETRY_ATTEMPTS", "3"))
 # Path to the SQLite database file.  The directory is created automatically
 # by the repository if it doesn't exist.
 DATABASE_PATH = os.getenv("DATABASE_PATH", "data/market_data.sqlite3")
+
+# ── Stale Data Handling ──────────────────────────────────────────────────────
+# Number of days after which a stock is considered "stale" if not refreshed.
+# When a stock is removed from the watchlist or fails to fetch for this many
+# days, it is soft-flagged as stale rather than deleted.
+STALE_DATA_THRESHOLD_DAYS = int(os.getenv("STALE_DATA_THRESHOLD_DAYS", "7"))
+
+# ── Problematic Ticker Handling ──────────────────────────────────────────────
+# List of tickers known to have issues with Yahoo Finance (delisted, incomplete
+# data, etc.). These tickers are skipped during ingestion to avoid repeated
+# failures that consume retries and slow down the pipeline.
+SKIP_TICKERS = set(
+    os.getenv("SKIP_TICKERS", "").split(",") if os.getenv("SKIP_TICKERS") else []
+)
+# SQ (Square) was delisted from NYSE in 2024 after Block acquisition
+if not SKIP_TICKERS:
+    SKIP_TICKERS = {"SQ"}

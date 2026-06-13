@@ -57,8 +57,27 @@ def _load_yahoo_info(ticker: str) -> dict:
 
     This function runs inside a separate thread so that the main thread
     can enforce a wall-clock timeout via Future.result(timeout=…).
+    
+    Attempts multiple fallback strategies:
+    1. Primary: info dict from standard endpoint
+    2. Fallback: fast_info if primary returns empty
     """
-    return yf.Ticker(ticker).info
+    ticker_obj = yf.Ticker(ticker)
+    info = ticker_obj.info
+    
+    # If we get an empty or stub response, try fast_info as a fallback
+    # (useful for some delisted or partially indexed tickers like SQ)
+    if not info or len(info) < 5:
+        try:
+            fast_info = ticker_obj.fast_info
+            if fast_info and len(fast_info) > 0:
+                # Merge fast_info into info, preferring fast_info values
+                info = {**info, **fast_info}
+        except Exception:
+            # If fast_info fails, just stick with the original info
+            pass
+    
+    return info
 
 
 def _is_rate_limit_error(error: Exception) -> bool:

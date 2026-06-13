@@ -16,7 +16,7 @@ import logging
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from config import MAX_WORKERS, TICKERS
+from config import MAX_WORKERS, TICKERS, SKIP_TICKERS
 from fetcher.yahoo_fetcher import fetch_stock
 from persistence.repository import StockRepository
 from validator.stock_validator import validation_errors
@@ -73,7 +73,7 @@ def run_ingestion(
 
     Returns:
         A dict containing:
-          - ``requested``, ``returned``, ``failed``, ``total_retries``,
+          - ``requested``, ``returned``, ``failed``, ``skipped``, ``stale_count``, ``total_retries``,
             ``time_taken_seconds`` — top-level summary stats.
           - ``persisted_at`` — ISO-8601 timestamp of the DB snapshot.
           - ``stocks`` — the full list of per-ticker results (including
@@ -84,30 +84,47 @@ def run_ingestion(
 
     start_time = time.time()
     results: list[dict] = []
+    
+    # ── Filter out skipped tickers (known problematic ones) ────────────────
+    active_tickers = [t for t in tickers if t.upper() not in SKIP_TICKERS]
+    skipped_tickers = [t for t in tickers if t.upper() in SKIP_TICKERS]
 
-    # ── Step 1: Concurrent fetch + validate ─────────────────────────────
+    # ── Step 1: Concurrent fetch + validate ─────────────────────────────────
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {
             executor.submit(_process_single_ticker, t): t
-            for t in tickers
+            for t in active_tickers
         }
         for future in as_completed(futures):
             results.append(future.result())
 
-    # ── Step 2: Separate successes from failures ────────────────────────
+    # ── Step 2: Add skipped tickers to results with skip status ────────────
+    for ticker in skipped_tickers:
+        results.append({
+            "ticker": ticker,
+            "status": "skipped",
+            "message": f"Ticker {ticker} is in the skip list (known issue with upstream)",
+            "retries": 0,
+        })
+
+    # ── Step 3: Separate successes from failures ────────────────────────────
     valid_records = [r for r in results if r["status"] == "success"]
 
-    # ── Step 3: Persist to SQLite ───────────────────────────────────────
+    # ── Step 4: Persist to SQLite ───────────────────────────────────────────
     repository = StockRepository()
-    snapshot = repository.save(valid_records, expected_tickers=tickers)
+    snapshot = repository.save(valid_records, expected_tickers=active_tickers)
 
     elapsed = round(time.time() - start_time, 2)
     total_retries = sum(r.get("retries", 0) for r in results)
+    failed_count = len([r for r in results if r["status"] in ("fetch_failed", "validation_failed")])
 
     summary = {
         "requested": len(tickers),
+        "skipped": len(skipped_tickers),
+        "active": len(active_tickers),
         "returned": len(valid_records),
-        "failed": len(tickers) - len(valid_records),
+        "failed": failed_count,
+        "stale_count": snapshot["stale_count"],
         "total_retries": total_retries,
         "time_taken_seconds": elapsed,
     }

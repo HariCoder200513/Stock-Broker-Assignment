@@ -155,3 +155,152 @@ All constants are overridable via environment variables:
 | `FETCH_TIMEOUT_SECONDS` | 10 | Per-ticker API call timeout |
 | `FETCH_RETRY_ATTEMPTS` | 3 | Max retries before marking a ticker as failed |
 | `DATABASE_PATH` | `data/market_data.sqlite3` | SQLite file location |
+| `STALE_DATA_THRESHOLD_DAYS` | 7 | Days after which a stock is marked stale if not refreshed |
+| `SKIP_TICKERS` | SQ | Comma-separated list of tickers to skip (known problematic ones) |
+
+---
+
+## 🔧 Recent Improvements
+
+### 1. **Fallback Data Fetching**
+The fetcher now uses a two-tier approach:
+- Primary: Standard `info` endpoint from yfinance
+- Fallback: `fast_info` endpoint if primary returns incomplete data
+- This handles partial responses from Yahoo Finance during high load or for certain delisted tickers
+
+### 2. **Graceful Handling of Problematic Tickers**
+Some tickers (e.g., **SQ** after the Block acquisition) may become unavailable or delisted. These are now:
+- **Skipped** during ingestion to avoid wasting retry budget
+- **Tracked** in the skip list with a clear status badge
+- **Configurable** via the `SKIP_TICKERS` environment variable
+
+### 3. **Stale Data Management**
+The repository now marks data as "stale" based on:
+- **Timeout threshold**: Stocks not refreshed for `STALE_DATA_THRESHOLD_DAYS` (default: 7 days) are marked stale
+- **Removal from watchlist**: Stocks no longer in the active ticker list are marked stale
+- **Soft deletion**: Stale records are preserved (not deleted) with `is_stale=1` and `stale_since` timestamp
+- **Active-only queries**: The dashboard only shows non-stale records
+
+### How Stale Detection Works
+
+```
+On each ingestion run:
+1. Records successfully fetched are upserted (is_stale cleared)
+2. After upsert, the repository checks for tickers that:
+   - Are NOT in the current watchlist, OR
+   - Have NOT been refreshed within the threshold
+3. These tickers get marked: is_stale=1, stale_since=<first time marked>
+4. Subsequent queries filter out stale records (WHERE is_stale=0)
+```
+
+---
+
+## 📊 Sample Output
+
+After running the pipeline with SQ skipped and stale data handling:
+
+```json
+{
+  "requested": 51,
+  "skipped": 1,
+  "active": 50,
+  "returned": 50,
+  "failed": 0,
+  "total_retries": 2,
+  "time_taken_seconds": 18.43,
+  "persisted_at": "2026-06-13T11:22:46.123456+00:00",
+  "stocks": [
+    {
+      "ticker": "AAPL",
+      "status": "success",
+      "name": "Apple Inc.",
+      "sector": "Technology",
+      "market_cap": 2850000000000,
+      "retries": 0
+    },
+    ...
+    {
+      "ticker": "SQ",
+      "status": "skipped",
+      "message": "Ticker SQ is in the skip list (known issue with upstream)",
+      "retries": 0
+    }
+  ]
+}
+```
+
+The database contains:
+- **50 active stocks** (is_stale = 0) — actively trading and recently fetched
+- **Historical records** for any previously removed tickers marked as stale (is_stale = 1)
+
+---
+
+## 🧪 Testing the Pipeline
+
+### Run Ingestion Manually
+```bash
+python3 -c "from orchestrator.pipeline import run_ingestion; import json; print(json.dumps(run_ingestion(), indent=2))"
+```
+
+### Skip a Different Ticker
+```bash
+SKIP_TICKERS="TSLA,PLTR" python main.py
+```
+
+### Adjust Stale Data Threshold
+```bash
+STALE_DATA_THRESHOLD_DAYS=30 python main.py
+```
+
+### Check Database State
+```bash
+sqlite3 data/market_data.sqlite3
+> SELECT ticker, is_stale, stale_since FROM market_data ORDER BY ticker;
+> SELECT * FROM ingestion_runs ORDER BY started_at DESC LIMIT 1;
+```
+
+---
+
+## 📝 Error Handling Philosophy
+
+This pipeline treats errors with **production-grade rigor**:
+
+| Error Type | Action |
+|---|---|
+| **Transient** (timeout, rate limit, partial response) | Retry with exponential backoff (1s → 2s → 4s) |
+| **Permanent** (empty ticker, invalid format) | Fail immediately, don't retry |
+| **Problematic upstream** (delisted ticker like SQ) | Skip gracefully, track in skip list |
+| **Database constraint violation** | Transaction rolls back; pipeline logs error |
+| **Network blip** | Recorded in retry count; observable via audit logs |
+
+All failures are logged with full context for debugging:
+```
+fetch_failed: "TransientMarketDataError: Timed out fetching TSLA after 10s"
+validation_failed: "missing name, sector"
+skipped: "Ticker SQ is in the skip list"
+```
+
+---
+
+## 🚀 Production Deployment
+
+### Docker
+```bash
+docker compose up --build
+```
+
+### Environment-driven Configuration
+```bash
+export MAX_WORKERS=50
+export FETCH_TIMEOUT_SECONDS=15
+export STALE_DATA_THRESHOLD_DAYS=14
+export SKIP_TICKERS="SQ,DELISTED_TICKER"
+export DATABASE_PATH="/data/market_data.db"
+python main.py
+```
+
+---
+
+## 📜 License
+
+MIT

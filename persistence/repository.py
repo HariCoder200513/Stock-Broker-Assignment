@@ -28,10 +28,10 @@ Why OrderedDict for dedup?
 import logging
 import sqlite3
 from collections import OrderedDict
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
-from config import DATABASE_PATH
+from config import DATABASE_PATH, STALE_DATA_THRESHOLD_DAYS
 from persistence.schema import initialize_schema
 from validator.stock_validator import validation_errors
 
@@ -50,8 +50,9 @@ class StockRepository:
         #  result["upserted_count"] → how many rows were written
     """
 
-    def __init__(self, path: str = DATABASE_PATH):
+    def __init__(self, path: str = DATABASE_PATH, stale_threshold_days: int = STALE_DATA_THRESHOLD_DAYS):
         self.path = Path(path)
+        self.stale_threshold_days = stale_threshold_days
 
     # ── Public API ──────────────────────────────────────────────────────
 
@@ -249,29 +250,53 @@ class StockRepository:
         timestamp: str,
     ) -> int:
         """
-        Mark any ticker NOT in ``expected_tickers`` as stale.
+        Mark any ticker NOT in ``expected_tickers`` OR not refreshed within
+        the stale threshold as stale.
 
-        This handles the case where a ticker is removed from the watchlist
-        or the upstream returned no data for it.  Rather than deleting the
-        row (losing historical data), we soft-flag it.
+        This handles two cases:
+        1. Tickers removed from the watchlist.
+        2. Tickers that haven't been seen for more than STALE_DATA_THRESHOLD_DAYS.
+
+        Rather than deleting rows (losing historical data), we soft-flag them.
 
         ``stale_since`` uses COALESCE so the first time a row goes stale we
         record the timestamp, but subsequent runs don't overwrite it.
         """
-        if not expected_tickers:
+        if not expected_tickers and self.stale_threshold_days <= 0:
             return 0
 
-        placeholders = ", ".join(["?"] * len(expected_tickers))
+        # Calculate the cutoff timestamp: older than this means stale
+        cutoff_timestamp = (
+            datetime.now(timezone.utc) - timedelta(days=self.stale_threshold_days)
+        ).isoformat()
+
+        conditions = []
+        params = [timestamp]
+
+        # Condition 1: Not in expected tickers
+        if expected_tickers:
+            placeholders = ", ".join(["?"] * len(expected_tickers))
+            conditions.append(f"ticker NOT IN ({placeholders})")
+            params.extend(expected_tickers)
+
+        # Condition 2: Older than threshold
+        if self.stale_threshold_days > 0:
+            conditions.append("last_seen_at < ?")
+            params.append(cutoff_timestamp)
+
+        if not conditions:
+            return 0
+
+        where_clause = " OR ".join([f"({c})" for c in conditions])
 
         cursor = connection.execute(
             f"""
             UPDATE market_data
             SET is_stale    = 1,
                 stale_since = COALESCE(stale_since, ?)
-            WHERE ticker NOT IN ({placeholders})
-              AND last_seen_at < ?
+            WHERE {where_clause}
             """,
-            [timestamp, *expected_tickers, timestamp],
+            params,
         )
 
         return cursor.rowcount if cursor.rowcount != -1 else 0
