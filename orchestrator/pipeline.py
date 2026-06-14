@@ -15,8 +15,10 @@ Separating the orchestrator from the Flask route has two benefits:
 import logging
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Any
 
 from config import MAX_WORKERS, TICKERS, SKIP_TICKERS
+from constants import STATUS_SUCCESS, STATUS_VALIDATION_FAILED, STATUS_FETCH_FAILED, STATUS_SKIPPED
 from fetcher.yahoo_fetcher import fetch_stock
 from persistence.repository import StockRepository
 from validator.stock_validator import validation_errors
@@ -24,7 +26,7 @@ from validator.stock_validator import validation_errors
 logger = logging.getLogger(__name__)
 
 
-def _process_single_ticker(ticker: str) -> dict:
+def _process_single_ticker(ticker: str) -> dict[str, Any]:
     """
     Fetch and validate a single ticker.
 
@@ -41,19 +43,19 @@ def _process_single_ticker(ticker: str) -> dict:
         if errors:
             return {
                 "ticker": ticker,
-                "status": "validation_failed",
+                "status": STATUS_VALIDATION_FAILED,
                 "message": "; ".join(errors),
                 "retries": stats["retries"],
             }
 
         record["retries"] = stats["retries"]
-        record["status"] = "success"
+        record["status"] = STATUS_SUCCESS
         return record
 
     except Exception as exc:
         return {
             "ticker": ticker,
-            "status": "fetch_failed",
+            "status": STATUS_FETCH_FAILED,
             "message": str(exc),
             "retries": stats["retries"],
         }
@@ -62,7 +64,7 @@ def _process_single_ticker(ticker: str) -> dict:
 def run_ingestion(
     tickers: list[str] = None,
     max_workers: int = None,
-) -> dict:
+) -> dict[str, Any]:
     """
     Execute one full ingestion run.
 
@@ -102,13 +104,13 @@ def run_ingestion(
     for ticker in skipped_tickers:
         results.append({
             "ticker": ticker,
-            "status": "skipped",
+            "status": STATUS_SKIPPED,
             "message": f"Ticker {ticker} is in the skip list (known issue with upstream)",
             "retries": 0,
         })
 
     # ── Step 3: Separate successes from failures ────────────────────────────
-    valid_records = [r for r in results if r["status"] == "success"]
+    valid_records = [r for r in results if r["status"] == STATUS_SUCCESS]
 
     # ── Step 4: Persist to SQLite ───────────────────────────────────────────
     repository = StockRepository()
@@ -116,7 +118,7 @@ def run_ingestion(
 
     elapsed = round(time.time() - start_time, 2)
     total_retries = sum(r.get("retries", 0) for r in results)
-    failed_count = len([r for r in results if r["status"] in ("fetch_failed", "validation_failed")])
+    failed_count = len([r for r in results if r["status"] in (STATUS_FETCH_FAILED, STATUS_VALIDATION_FAILED)])
 
     summary = {
         "requested": len(tickers),

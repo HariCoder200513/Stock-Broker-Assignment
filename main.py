@@ -8,10 +8,6 @@ from routes.stocks import (
     stocks_bp
 )
 
-from logger_config import setup_logging
-
-setup_logging()
-
 app = Flask(__name__, static_url_path='', static_folder='.')
 
 CORS(app)
@@ -21,12 +17,20 @@ app.register_blueprint(
 )
 
 
+def initialize_logging():
+    """Initialize structured JSON logging for the Flask app."""
+    from logger_config import setup_logging
+    setup_logging()
+
+
 @app.route("/")
 def index():
     return app.send_static_file('index.html')
 
 
 if __name__ == "__main__":
+    initialize_logging()
+    
     # Render injects PORT as an env var; default to 5000 for local dev.
     # host="0.0.0.0" binds to all interfaces — required by Render
     # (localhost-only binding causes the port scan timeout error).

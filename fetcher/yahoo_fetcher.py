@@ -19,6 +19,7 @@ Retry strategy (via tenacity):
 
 import logging
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
+from typing import Any, Optional
 
 import yfinance as yf
 from tenacity import (
@@ -51,7 +52,7 @@ class TransientMarketDataError(MarketDataError):
 
 # ── Internal helpers ────────────────────────────────────────────────────────
 
-def _load_yahoo_info(ticker: str) -> dict:
+def _load_yahoo_info(ticker: str) -> dict[str, Any]:
     """
     Call the yfinance API for a single ticker.
 
@@ -109,7 +110,7 @@ class YahooFinanceFetcher:
     def __init__(self, timeout_seconds: int = FETCH_TIMEOUT_SECONDS):
         self.timeout_seconds = timeout_seconds
 
-    def fetch(self, ticker: str) -> dict:
+    def fetch(self, ticker: str) -> dict[str, Any]:
         """
         Fetch market data for *ticker* and return a raw dict.
 
@@ -174,7 +175,7 @@ class YahooFinanceFetcher:
 
     # ── Private: timeout-wrapped I/O ────────────────────────────────────
 
-    def _fetch_info_with_timeout(self, ticker: str) -> dict:
+    def _fetch_info_with_timeout(self, ticker: str) -> dict[str, Any]:
         """
         Run the yfinance call in a background thread and impose a hard
         wall-clock timeout.
@@ -226,7 +227,7 @@ def _track_retry(retry_state):
     after=_track_retry,
     reraise=True,
 )
-def fetch_stock(ticker: str, stats: dict = None) -> dict:
+def fetch_stock(ticker: str, stats: Optional[dict[str, Any]] = None) -> dict[str, Any]:
     """
     Public entry point — fetch one ticker with automatic retries.
 
